@@ -1,7 +1,7 @@
 Categories
 ==========
 
-*Core Data -> NSArray+UpdateParser*
+*NSArray+UpdateParser*
 
 This class simplifies RESTful data parsing when using Core Data providing two methods that are optimised for different scenarios:
 * Update - should be used only in cases where circular references exist (i.e. nested objects that refer to themselves)
