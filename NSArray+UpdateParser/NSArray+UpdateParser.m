@@ -45,47 +45,41 @@
 - (void)walkItemsOfType:(NSString *)type inContext:(NSManagedObjectContext *)context withCompletion:(UpdateParserCompletion)completion
 {
     @autoreleasepool {
-        if (type) {
-            NSArray *objects = [[self objectsOfType:type] sortedObjectsByID];
-            NSMutableArray *identifiers = [objects collectObjectIDs], *processedIdentifiers = [NSMutableArray array];
-            if (identifiers.count == 0) {
-                if (completion) {
-                    completion(nil, nil, NO);
-                }
-                return;
+        if (type) return;
+        NSArray *objects = [[self objectsOfType:type] sortedObjectsByID];
+        NSMutableArray *identifiers = [objects collectObjectIDs], *processedIdentifiers = [NSMutableArray array];
+        if (identifiers.count == 0) return;
+        NSFetchRequest *request = [self fetchRequestForType:type];
+        [request setPredicate:[NSPredicate predicateWithFormat:@"serverID in %@", identifiers]];
+        NSArray *requestObjects = [context executeFetchRequest:request error:NULL];
+        NSUInteger requestIndex = 0;
+        for (NSUInteger dataIndex = 0; dataIndex < objects.count; dataIndex++) {
+            NSNumber *identifier = identifiers[dataIndex];
+            BOOL created = NO;
+            id object = nil;
+            if (requestObjects.count > requestIndex) {
+                object = requestObjects[requestIndex];
             }
-            NSFetchRequest *request = [self fetchRequestForType:type];
-            [request setPredicate:[NSPredicate predicateWithFormat:@"serverID in %@", identifiers]];
-            NSArray *requestObjects = [context executeFetchRequest:request error:NULL];
-            NSUInteger requestIndex = 0;
-            for (NSUInteger dataIndex = 0; dataIndex < objects.count; dataIndex++) {
-                NSNumber *identifier = identifiers[dataIndex];
-                BOOL created = NO;
-                id object = nil;
-                if (requestObjects.count > requestIndex) {
-                    object = requestObjects[requestIndex];
-                }
-                if ([object[@"serverID"] longLongValue] == [identifier longLongValue]) {
-                    requestIndex++;
+            if ([object[@"serverID"] longLongValue] == [identifier longLongValue]) {
+                requestIndex++;
+            } else {
+                if (![processedIdentifiers containsObject:identifier]) {
+                    object = [NSEntityDescription insertNewObjectForEntityForName:type inManagedObjectContext:context];
+                    [processedIdentifiers addObject:identifier];
+                    created = YES;
                 } else {
-                    if (![processedIdentifiers containsObject:identifier]) {
-                        object = [NSEntityDescription insertNewObjectForEntityForName:type inManagedObjectContext:context];
-                        [processedIdentifiers addObject:identifier];
-                        created = YES;
-                    } else {
-                        object = nil;
-                    }
+                    object = nil;
                 }
-                if (object) {
-                    if (created && [object respondsToSelector:@selector(setServerID:)]) {
-                        [object performSelector:@selector(setServerID:) withObject:identifier];
-                    }
-                    if ([object respondsToSelector:@selector(processData:)]) {
-                        [object performSelector:@selector(processData:) withObject:objects[dataIndex]];
-                    }
-                    if (completion) {
-                        completion(object, objects[dataIndex], created);
-                    }
+            }
+            if (object) {
+                if (created && [object respondsToSelector:@selector(setServerID:)]) {
+                    [object performSelector:@selector(setServerID:) withObject:identifier];
+                }
+                if ([object respondsToSelector:@selector(processData:)]) {
+                    [object performSelector:@selector(processData:) withObject:objects[dataIndex]];
+                }
+                if (completion) {
+                    completion(object, objects[dataIndex], created);
                 }
             }
         }
@@ -95,49 +89,45 @@
 - (void)updateItemsOfType:(NSString *)type inContext:(NSManagedObjectContext *)context withNestedTypes:(NSArray*)nestedTypes andCompletion:(UpdateParserCompletion)completion
 {
     @autoreleasepool {
-        if (type) {
-            NSArray *objects = [self objectsOfType:type];
-            NSMutableArray *identifiers = [objects collectObjectIDs];
-            if (identifiers.count == 0) {
-                if (completion) {
-                    completion(nil, nil, NO);
+        if (type) return;
+        NSArray *objects = [self objectsOfType:type];
+        NSMutableArray *identifiers = [objects collectObjectIDs];
+        if (identifiers.count == 0) return;
+        NSFetchRequest *request = [self fetchRequestForType:type];
+        [request setPredicate:[NSPredicate predicateWithFormat:@"serverID in %@", identifiers]];
+        NSArray *requestObjects = [context executeFetchRequest:request error:NULL], *matchingObjects = nil;
+        NSPredicate *predicate = [NSPredicate predicateWithFormat:@"serverID == $SERVER_ID"];
+        for (NSDictionary *data in objects) {
+            BOOL parsed = NO;
+            long long idValue = [data[@"id"] longLongValue];
+            if (idValue > 0) {
+                NSNumber *identifier = [NSNumber numberWithLongLong:idValue];
+                NSPredicate *localPredicate = [predicate predicateWithSubstitutionVariables:@{@"SERVER_ID": identifier}];
+                if ([nestedTypes containsObject:type]) {
+                    request = [self fetchRequestForType:type];
+                    [request setPredicate:localPredicate];
+                    matchingObjects = [context executeFetchRequest:request error:NULL];
+                } else {
+                    matchingObjects = [requestObjects filteredArrayUsingPredicate:localPredicate];
                 }
-                return;
-            }
-            NSFetchRequest *request = [self fetchRequestForType:type];
-            [request setPredicate:[NSPredicate predicateWithFormat:@"serverID in %@", identifiers]];
-            NSArray *requestObjects = [context executeFetchRequest:request error:NULL], *matchingObjects = nil;
-            NSPredicate *predicate = [NSPredicate predicateWithFormat:@"serverID == $SERVER_ID"];
-            for (NSDictionary *data in objects) {
-                long long idValue = [data[@"id"] longLongValue];
-                if (idValue > 0) {
-                    NSNumber *identifier = [NSNumber numberWithLongLong:idValue];
-                    NSPredicate *localPredicate = [predicate predicateWithSubstitutionVariables:@{@"SERVER_ID": identifier}];
-                    if ([nestedTypes containsObject:type]) {
-                        request = [self fetchRequestForType:type];
-                        [request setPredicate:localPredicate];
-                        matchingObjects = [context executeFetchRequest:request error:NULL];
-                    } else {
-                        matchingObjects = [requestObjects filteredArrayUsingPredicate:localPredicate];
+                BOOL created = NO;
+                id object = nil;
+                if (matchingObjects.count == 0) {
+                    object = [NSEntityDescription insertNewObjectForEntityForName:type inManagedObjectContext:context];
+                    created = YES;
+                } else {
+                    object = [matchingObjects lastObject];
+                }
+                if (object) {
+                    parsed = YES;
+                    if (created && [object respondsToSelector:@selector(setServerID:)]) {
+                        [object performSelector:@selector(setServerID:) withObject:identifier];
                     }
-                    BOOL created = NO;
-                    id object = nil;
-                    if (matchingObjects.count == 0) {
-                        object = [NSEntityDescription insertNewObjectForEntityForName:type inManagedObjectContext:context];
-                        created = YES;
-                    } else {
-                        object = [matchingObjects lastObject];
+                    if ([object respondsToSelector:@selector(processData:)]) {
+                        [object performSelector:@selector(processData:) withObject:data];
                     }
-                    if (object) {
-                        if (created && [object respondsToSelector:@selector(setServerID:)]) {
-                            [object performSelector:@selector(setServerID:) withObject:identifier];
-                        }
-                        if ([object respondsToSelector:@selector(processData:)]) {
-                            [object performSelector:@selector(processData:) withObject:data];
-                        }
-                        if (completion) {
-                            completion(object, data, created);
-                        }
+                    if (completion) {
+                        completion(object, data, created);
                     }
                 }
             }
