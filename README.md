@@ -7,7 +7,7 @@ This class simplifies JSON RESTful data parsing (and plist or other dictionary->
 * Update - should be used only in cases where circular references exist (i.e. nested objects that refer to themselves)
 * Walk - should be used in the majority of cases, it is the faster alternative
 
-Assumptions
+Assumptions:
 * Each NSManagedObject subclass should implement updateWithData:
 * Each NSManagedObject subclass should have a field called 'serverID'
 * JSON response should include a unique field called 'id' against each object
