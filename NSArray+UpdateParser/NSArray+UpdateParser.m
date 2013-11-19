@@ -27,9 +27,9 @@
 - (NSMutableArray*)collectObjectIDs {
     NSMutableArray *identifiers = [NSMutableArray array];
     for (NSDictionary *update in self) {
-        long long identifier = [update[@"id"] longLongValue];
+        long long identifier = [update[@"id"] unsignedLongLongValue];
         if (identifier > 0) {
-            [identifiers addObject:[NSNumber numberWithLongLong:identifier]];
+            [identifiers addObject:[NSNumber numberWithUnsignedLongLong:identifier]];
         }
     }
     return identifiers;
@@ -45,7 +45,7 @@
 - (void)walkItemsOfType:(NSString *)type inContext:(NSManagedObjectContext *)context withCompletion:(UpdateParserCompletion)completion
 {
     @autoreleasepool {
-        if (type) return;
+        if (!type) return;
         NSArray *objects = [[self objectsOfType:type] sortedObjectsByID];
         NSMutableArray *identifiers = [objects collectObjectIDs], *processedIdentifiers = [NSMutableArray array];
         if (identifiers.count == 0) return;
@@ -60,7 +60,7 @@
             if (requestObjects.count > requestIndex) {
                 object = requestObjects[requestIndex];
             }
-            if ([object[@"serverID"] longLongValue] == [identifier longLongValue]) {
+            if ([object[@"serverID"] unsignedLongLongValue] == [identifier unsignedLongLongValue]) {
                 requestIndex++;
             } else {
                 if (![processedIdentifiers containsObject:identifier]) {
@@ -89,7 +89,7 @@
 - (void)updateItemsOfType:(NSString *)type inContext:(NSManagedObjectContext *)context withNestedTypes:(NSArray*)nestedTypes andCompletion:(UpdateParserCompletion)completion
 {
     @autoreleasepool {
-        if (type) return;
+        if (!type) return;
         NSArray *objects = [self objectsOfType:type];
         NSMutableArray *identifiers = [objects collectObjectIDs];
         if (identifiers.count == 0) return;
@@ -99,9 +99,9 @@
         NSPredicate *predicate = [NSPredicate predicateWithFormat:@"serverID == $SERVER_ID"];
         for (NSDictionary *data in objects) {
             BOOL parsed = NO;
-            long long idValue = [data[@"id"] longLongValue];
+            unsigned long long idValue = [data[@"id"] unsignedLongLongValue];
             if (idValue > 0) {
-                NSNumber *identifier = [NSNumber numberWithLongLong:idValue];
+                NSNumber *identifier = [NSNumber numberWithUnsignedLongLong:idValue];
                 NSPredicate *localPredicate = [predicate predicateWithSubstitutionVariables:@{@"SERVER_ID": identifier}];
                 if ([nestedTypes containsObject:type]) {
                     request = [self fetchRequestForType:type];
